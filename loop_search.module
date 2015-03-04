@@ -1,59 +1,130 @@
 <?php
 
 /**
- * Implements hook_form_FORM_ID_alter().
+ * @file
+ * Auto-complete Apache Solr search module.
  */
-function loop_search_form_search_block_form_alter(&$form, $form_state) {
-  // Add our JS class to form.
-  array_push($form['search_block_form']['#attributes']['class'], 'js-autocomplete-search--field');
 
-  // Add javascript to autocomplete scripts.
-  drupal_add_js(drupal_get_path('module', 'loop_search') .'/jquery.autocomplete.js');
-  drupal_add_js(drupal_get_path('module', 'loop_search') .'/loop_search.js');
-
-  // Add path to autocomplete.
-  drupal_add_js(array('loop_search_autocomplete' => array('path' => url('loop_search_autocomplete'))), 'setting');
-}
+include_once 'loop_search.features.inc';
 
 /**
  * Implements hook_menu().
  */
 function loop_search_menu() {
-  $items['loop_search_autocomplete'] = array(
-    'page callback' => 'loop_search_suggest_entries',
-    'access callback' => 'user_access',
-    'access arguments' => array('search content'),
+  $items['loop_search_nodes'] = array(
+    'title' => 'List nodes in JSON format',
+    'page callback' => 'loop_search_nodes',
     'type' => MENU_CALLBACK,
+    'access arguments' => array('access content'),
   );
+
   return $items;
 }
 
-function loop_search_suggest_entries() {
-  // Get query from autocomplete search.
-  $keys = $_GET['query'];
+/**
+ * Return every node of type post in JSON format.
+ *
+ * Outputs JSON object.
+ */
+function loop_search_nodes() {
+  // Select nodes.
+  $nodes = db_select('node', 'n')
+    ->fields('n', array('nid', 'title'))
+    ->condition('status', 1)
+    ->condition('type', 'post')
+    ->execute();
 
-  // Get default conditions.
-  $searchConditions = apachesolr_search_conditions();
-
-  // Load the Solr core search.
-  $search_page = apachesolr_search_page_load('core_search');
-
-  // Set this to 5 items, per design.
-  $search_page['settings']['apachesolr_search_per_page'] = 5;
-
-  // Make the search.
-  $suggestions = apachesolr_search_search_results($keys, $searchConditions, $search_page);
-
-  // Build data array
+  // Build nodes.
   $data = array();
-  foreach ($suggestions as $suggestion) {
+  foreach ($nodes as $node) {
     $data[] = array(
-      // Truncate snippet.
-      'value' => truncate_utf8($suggestion['snippet'], 100, FALSE, TRUE),
-      'data' => $suggestion['link'],
+      // For better search, use strtolower.
+      'value' => strtolower(trim(trim($node->title), '"')),
+      // Fine human output.
+      'title' => trim($node->title),
+      // Use internal path.
+      'link' => '/' . drupal_get_path_alias('node/' . $node->nid),
     );
   }
 
-  // Output to JSON.
-  drupal_json_output(array('suggestions' => $data));
+  // Return as JSON.
+  drupal_json_output($data);
+}
+
+/**
+ * Implements hook_init().
+ *
+ * Include search JS for every page load.
+ */
+function loop_search_init() {
+  global $user;
+
+  // Check if it's a registered user.
+  if ($user->uid > 0) {
+    drupal_add_js(drupal_get_path('module', 'loop_search') . '/js/handlebars-v1.2.0.js');
+    drupal_add_js(drupal_get_path('module', 'loop_search') . '/js/typeahead.bundle.js');
+    drupal_add_js(drupal_get_path('module', 'loop_search') . '/js/loop_search.js', array(
+      'scoop' => 'header',
+      'weight' => 1000,
+    ));
+    drupal_add_js(drupal_get_path('module', 'loop_search') . '/js/search.js');
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function loop_search_theme() {
+  return array(
+    'loop_search_theme' => array(
+      'render element' => 'form',
+      'template' => 'loop-search--form',
+    ),
+  );
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Alter search form for Twitter Typeahead.
+ */
+function loop_search_form_search_api_page_search_form_default_alter(&$form) {
+  // Fetch search page id.
+  $default_page_id = db_query("SELECT id FROM {search_api_page} WHERE index_id = 'post'")->fetchField();
+
+  $form['#attributes']['class'] = 'js--search';
+
+  // Add class to submit.
+  $form['submit_' . $default_page_id]['#attributes']['class'][] = 'typeahead-block--button';
+
+  // Inline styling needed for Twitter Typeahead.
+  $form['keys_' . $default_page_id]['#attributes']['style'] = "position: relative; vertical-align: top; background-color: transparent;";
+
+  // Default placeholder.
+  $form['keys_' . $default_page_id]['#attributes']['placeholder'] = t('E.g. "How do you document a subject"');
+
+  // Yet again, some id and classes for Twitter Typehead.
+  $form['keys_' . $default_page_id]['#attributes']['id'][] = 'typeahead';
+  $form['keys_' . $default_page_id]['#attributes']['class'][] = 'typeahead';
+  $form['keys_' . $default_page_id]['#attributes']['class'][] = 'tt-query';
+
+  // Figure out if we need a default value.
+  $arg = arg();
+  if ($arg[0] == "node" && is_numeric($arg[1])) {
+    // Load correct node.
+    $node = node_load($arg[1]);
+    if ($node->type == 'post') {
+      // Load entity wrapper.
+      $wrapper = entity_metadata_wrapper('node', $node);
+
+      // Get description field.
+      $description = $wrapper->field_description->value();
+
+      // Verify its a string.
+      if (is_string($description)) {
+        // Change default value.
+        $form['keys_' . $default_page_id]['#default_value'] = $description;
+      }
+    }
+  }
 }
