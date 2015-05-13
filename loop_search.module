@@ -68,6 +68,7 @@ function loop_search_init() {
       'weight' => 1000,
     ));
     drupal_add_js(drupal_get_path('module', 'loop_search') . '/js/search.js');
+    drupal_add_js(drupal_get_path('module', 'loop_search') . '/js/placeholders.js');
   }
 }
 
