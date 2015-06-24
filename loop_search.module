@@ -34,8 +34,10 @@ function loop_search_menu() {
  *
  * Output results in JSON format.
  *
- * @param $content_type string What content type to search on.
- * @param $terms string The search terms to use for the query.
+ * @param string $content_type
+ *   The content type to search on.
+ * @param string $terms
+ *   The search terms to use for the query.
  * @throws \SearchApiException
  */
 function loop_search_callback($content_type, $terms) {
@@ -50,7 +52,7 @@ function loop_search_callback($content_type, $terms) {
   // Add the search terms to the query.
   $query->keys($terms);
 
-  // Execute the query
+  // Execute the query.
   $query_result = $query->execute();
 
   $data = array();
@@ -65,7 +67,7 @@ function loop_search_callback($content_type, $terms) {
       'title' => trim($node->title),
       // Use internal path.
       'link' => '/' . drupal_get_path_alias('node/' . $node->nid),
-      // Node ID
+      // For dupDetector.
       'id' => $node->nid,
     );
   }
@@ -109,7 +111,7 @@ function loop_search_nodes() {
       'title' => trim($node->title),
       // Use internal path.
       'link' => '/' . drupal_get_path_alias('node/' . $node->nid),
-      // Node ID
+      // For dupDetector.
       'id' => $node->nid,
     );
   }

@@ -23,7 +23,7 @@ jQuery(document).ready(function($) {
       // TTL 30 sec.
       ttl: 30000
     },
-    // Detect duplicates in local and remote matches
+    // Detect duplicates in local and remote matches.
     dupDetector: function(remoteMatch, localMatch) {
       return remoteMatch.id === localMatch.id;
     }
